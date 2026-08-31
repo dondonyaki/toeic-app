@@ -8,9 +8,8 @@
         .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         button { background: #007bff; color: #fff; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin: 5px 0; }
         button:hover { background: #0056b3; }
-        button:active { background: #004085; }
         .hidden { display: none; }
-        textarea, input[type="text"] { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
+        input[type="password"] { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
         .feedback { background: #e8f4fd; padding: 10px; border-left: 4px solid #007bff; margin-top: 10px; white-space: pre-wrap; }
     </style>
 </head>
@@ -74,9 +73,10 @@
         document.getElementById("aiCoachArea").classList.add("hidden");
         document.getElementById("coachResult").classList.add("hidden");
 
-        const prompt = "TOEIC Part 2 (応答問題) の形式で、リスニングのひっかけになりやすい問題（特にWillやWouldなどの助動詞や、直球ではない返答のもの）を1問作成してください。以下のJSON形式のみで出力してください。Markdownのバッククォート(```)は付けないでください。\n{\"situation\": \"状況の説明（日本語）\", \"script\": \"英語のスクリプト（例: Will you be able to finish the report by noon? - I'm afraid I have another meeting.）\", \"translation\": \"日本語訳\"}";
+        const prompt = "TOEIC Part 2 (応答問題) の形式で、リスニングのひっかけになりやすい問題を1問作成してください。以下のJSON形式のみで出力してください。Markdownのバッククォートは付けないでください。\n{\"situation\": \"状況の説明（日本語）\", \"script\": \"英語のスクリプト（例: Will you be able to finish the report by noon? - I'm afraid I have another meeting.）\", \"translation\": \"日本語訳\"}";
 
-        const url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=)" + apiKey;
+        // モデル名を確実に正しいもの（gemini-2.0-flash）に指定
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
 
         try {
             const response = await fetch(url, {
@@ -84,6 +84,7 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
             });
+
             const data = await response.json();
             
             if (data.error) {
@@ -102,7 +103,7 @@
             document.getElementById("toggleBtn").classList.remove("hidden");
             alert("新しい問題ができました！まずは「音声を聴く」で耳だけで挑戦してください。");
         } catch (e) {
-            alert("問題生成に失敗しました。コンソールを確認してください。");
+            alert("通信または解析に失敗しました。コンソールを確認してください。");
             console.error(e);
         }
     }
@@ -147,14 +148,8 @@
             stopMicUI();
         };
 
-        recognition.onerror = (event) => {
-            console.error(event.error);
-            stopMicUI();
-        };
-
-        recognition.onend = () => {
-            stopMicUI();
-        };
+        recognition.onerror = (event) => { console.error(event.error); stopMicUI(); };
+        recognition.onend = () => { stopMicUI(); };
     } else {
         alert("このブラウザは音声認識に対応していません。Google Chromeをお使いください。");
     }
@@ -167,9 +162,7 @@
                 isRecording = true;
                 document.getElementById("micBtn").innerText = "🔴 喋ってください...（収音中）";
                 document.getElementById("micBtn").style.background = "#dc3545";
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error(e); }
         } else {
             recognition.stop();
             stopMicUI();
@@ -195,9 +188,9 @@
         resultDiv.classList.remove("hidden");
         resultDiv.innerText = "AIコーチがあなたの発音を分析中...";
 
-        const prompt = `あなたは厳しい英語の発音コーチです。\n【お手本の英文】: ${currentScript}\n【ユーザーが発音して認識されたテキスト】: ${userText}\n\nこの2つを比較して、以下の構成で日本語でアドバイスをください。\n1. 判定（意味が通じるか、どこが違うか）\n2. ネイティブらしく聞こえるための具体的なアドバイス（WillやWouldの縮約や音声変化のコツなど）`;
+        const prompt = `あなたは厳しい英語の発音コーチです。\n【お手本の英文】: ${currentScript}\n【ユーザーが発音して認識されたテキスト】: ${userText}\n\nこの2つを比較して、以下の構成で日本語でアドバイスをください。\n1. 判定（意味が通じるか、どこが違うか）\n2. ネイティブらしく聞こえるための具体的なアドバイス`;
 
-        const url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=)" + apiKey;
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
 
         try {
             const response = await fetch(url, {
@@ -205,6 +198,7 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
             });
+
             const data = await response.json();
             
             if (data.error) {
