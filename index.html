@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>AI TOEIC リスニング道場</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f9f9f9; color: #333; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        button { background: #007bff; color: #fff; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin: 5px 0; }
+        button:hover { background: #0056b3; }
+        button:active { background: #004085; }
+        .hidden { display: none; }
+        textarea, input[type="text"] { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
+        .feedback { background: #e8f4fd; padding: 10px; border-left: 4px solid #007bff; margin-top: 10px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>🔑 APIキー設定</h2>
+        <label>Google AI Studio APIキー:</label>
+        <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+        <button onclick="saveApiKey()">キーを保存</button>
+    </div>
+
+    <div class="card">
+        <h2>🎧 TOEIC リスニング特訓</h2>
+        <button onclick="generateProblem()">AIに新しい問題を作ってもらう</button>
+        <hr>
+        <p><strong>シチュエーション:</strong> <span id="situation">「問題生成ボタン」を押してください</span></p>
+        
+        <button onclick="playAudio()">🔊 音声を聴く（ブラインド）</button>
+        
+        <div id="answerArea" class="hidden" style="margin-top: 15px;">
+            <p><strong>スクリプト・日本語訳:</strong></p>
+            <p id="scriptText" style="color: #666;"></p>
+        </div>
+        <button onclick="toggleAnswer()" id="toggleBtn" class="hidden" style="background: #6c757d;">答え（スクリプト）を見る</button>
+    </div>
+
+    <div class="card">
+        <h2>🎤 発音チェック ＆ AIコーチング</h2>
+        <button id="micBtn" onclick="toggleMic()">🎙️ マイク音声認識を開始（待機中）</button>
+        <p><strong>認識されたあなたの発音:</strong> <span id="transcript" style="color: #007bff; font-weight: bold;">(未入力)</span></p>
+        
+        <div id="aiCoachArea" class="hidden">
+            <button onclick="getAICoaching()">🤖 AIコーチに発音を判定してもらう</button>
+        </div>
+        <div id="coachResult" class="feedback hidden"></div>
+    </div>
+
+<script>
+    let apiKey = localStorage.getItem("gemini_apiKey") || "";
+    if (apiKey) {
+        document.getElementById("apiKeyInput").value = apiKey;
+    }
+
+    function saveApiKey() {
+        apiKey = document.getElementById("apiKeyInput").value.trim();
+        localStorage.setItem("gemini_apiKey", apiKey);
+        alert("APIキーを保存しました！");
+    }
+
+    let currentScript = "";
+
+    async function generateProblem() {
+        if (!apiKey) {
+            alert("先に上の欄にAPIキーを設定してください！");
+            return;
+        }
+        document.getElementById("situation").innerText = "AIが問題を考えています...";
+        document.getElementById("answerArea").classList.add("hidden");
+        document.getElementById("toggleBtn").classList.add("hidden");
+        document.getElementById("aiCoachArea").classList.add("hidden");
+        document.getElementById("coachResult").classList.add("hidden");
+
+        const prompt = "TOEIC Part 2 (応答問題) の形式で、リスニングのひっかけになりやすい問題（特にWillやWouldなどの助動詞や、直球ではない返答のもの）を1問作成してください。以下のJSON形式のみで出力してください。Markdownのバッククォート(```)は付けないでください。\n{\"situation\": \"状況の説明（日本語）\", \"script\": \"英語のスクリプト（例: Will you be able to finish the report by noon? - I'm afraid I have another meeting.）\", \"translation\": \"日本語訳\"}";
+
+        const url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=)" + apiKey;
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const data = await response.json();
+            
+            if (data.error) {
+                alert("APIエラー: " + data.error.message);
+                return;
+            }
+
+            const textResponse = data.candidates[0].content.parts[0].text.trim();
+            const cleanJson = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
+            const problem = JSON.parse(cleanJson);
+
+            document.getElementById("situation").innerText = problem.situation;
+            currentScript = problem.script;
+            document.getElementById("scriptText").innerText = `${problem.script}\n（訳: ${problem.translation}）`;
+            
+            document.getElementById("toggleBtn").classList.remove("hidden");
+            alert("新しい問題ができました！まずは「音声を聴く」で耳だけで挑戦してください。");
+        } catch (e) {
+            alert("問題生成に失敗しました。コンソールを確認してください。");
+            console.error(e);
+        }
+    }
+
+    function playAudio() {
+        if (!currentScript) {
+            alert("先に問題を作成してください！");
+            return;
+        }
+        const englishPart = currentScript.split("-")[0] || currentScript;
+        const utterance = new SpeechSynthesisUtterance(englishPart);
+        utterance.lang = "en-US";
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function toggleAnswer() {
+        const area = document.getElementById("answerArea");
+        const btn = document.getElementById("toggleBtn");
+        if (area.classList.contains("hidden")) {
+            area.classList.remove("hidden");
+            btn.innerText = "答えを隠す";
+        } else {
+            area.classList.add("hidden");
+            btn.innerText = "答え（スクリプト）を見る";
+        }
+    }
+
+    let recognition;
+    let isRecording = false;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById("transcript").innerText = transcript;
+            document.getElementById("aiCoachArea").classList.remove("hidden");
+            stopMicUI();
+        };
+
+        recognition.onerror = (event) => {
+            console.error(event.error);
+            stopMicUI();
+        };
+
+        recognition.onend = () => {
+            stopMicUI();
+        };
+    } else {
+        alert("このブラウザは音声認識に対応していません。Google Chromeをお使いください。");
+    }
+
+    function toggleMic() {
+        if (!recognition) return;
+        if (!isRecording) {
+            try {
+                recognition.start();
+                isRecording = true;
+                document.getElementById("micBtn").innerText = "🔴 喋ってください...（収音中）";
+                document.getElementById("micBtn").style.background = "#dc3545";
+            } catch (e) {
+                console.error(e);
+            }
+        } else {
+            recognition.stop();
+            stopMicUI();
+        }
+    }
+
+    function stopMicUI() {
+        isRecording = false;
+        const btn = document.getElementById("micBtn");
+        if(btn) {
+            btn.innerText = "🎙️ マイク音声認識を開始";
+            btn.style.background = "#007bff";
+        }
+    }
+
+    async function getAICoaching() {
+        if (!apiKey) {
+            alert("APIキーが設定されていません。");
+            return;
+        }
+        const userText = document.getElementById("transcript").innerText;
+        const resultDiv = document.getElementById("coachResult");
+        resultDiv.classList.remove("hidden");
+        resultDiv.innerText = "AIコーチがあなたの発音を分析中...";
+
+        const prompt = `あなたは厳しい英語の発音コーチです。\n【お手本の英文】: ${currentScript}\n【ユーザーが発音して認識されたテキスト】: ${userText}\n\nこの2つを比較して、以下の構成で日本語でアドバイスをください。\n1. 判定（意味が通じるか、どこが違うか）\n2. ネイティブらしく聞こえるための具体的なアドバイス（WillやWouldの縮約や音声変化のコツなど）`;
+
+        const url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=)" + apiKey;
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const data = await response.json();
+            
+            if (data.error) {
+                resultDiv.innerText = "APIエラー: " + data.error.message;
+                return;
+            }
+
+            resultDiv.innerText = data.candidates[0].content.parts[0].text;
+        } catch (e) {
+            resultDiv.innerText = "AIコーチングの取得に失敗しました。";
+            console.error(e);
+        }
+    }
+</script>
+
+</body>
+</html>
