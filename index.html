@@ -75,8 +75,8 @@
 
         const prompt = "TOEIC Part 2 (応答問題) の形式で、リスニングのひっかけになりやすい問題を1問作成してください。以下のJSON形式のみで出力してください。Markdownのバッククォートは付けないでください。\n{\"situation\": \"状況の説明（日本語）\", \"script\": \"英語のスクリプト（例: Will you be able to finish the report by noon? - I'm afraid I have another meeting.）\", \"translation\": \"日本語訳\"}";
 
-        // モデル名を確実に正しいもの（gemini-2.0-flash）に指定
-        const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+        // モデル名を最新の gemini-3.6-flash に変更
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + apiKey;
 
         try {
             const response = await fetch(url, {
@@ -190,7 +190,8 @@
 
         const prompt = `あなたは厳しい英語の発音コーチです。\n【お手本の英文】: ${currentScript}\n【ユーザーが発音して認識されたテキスト】: ${userText}\n\nこの2つを比較して、以下の構成で日本語でアドバイスをください。\n1. 判定（意味が通じるか、どこが違うか）\n2. ネイティブらしく聞こえるための具体的なアドバイス`;
 
-        const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+        // モデル名を最新の gemini-3.6-flash に変更
+        const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + apiKey;
 
         try {
             const response = await fetch(url, {
