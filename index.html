@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>AI TOEIC リスニング道場</title>
+    <title>AI TOEIC（？）リスニング修羅場道場</title>
     <style>
         body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f9f9f9; color: #333; }
         .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -11,6 +11,8 @@
         .hidden { display: none; }
         input[type="password"] { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
         .feedback { background: #e8f4fd; padding: 10px; border-left: 4px solid #007bff; margin-top: 10px; white-space: pre-wrap; }
+        .option-btn { display: block; width: 100%; text-align: left; background: #f1f3f5; color: #333; margin: 8px 0; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; }
+        .option-btn:hover { background: #e2e6ea; }
     </style>
 </head>
 <body>
@@ -23,18 +25,23 @@
     </div>
 
     <div class="card">
-        <h2>🎧 TOEIC リスニング特訓</h2>
+        <h2>🎧 リスニング＆応答特訓（修羅場モード対応）</h2>
         <button onclick="generateProblem()">AIに新しい問題を作ってもらう</button>
         <hr>
         <p><strong>シチュエーション:</strong> <span id="situation">「問題生成ボタン」を押してください</span></p>
         
-        <button onclick="playAudio()">🔊 音声を聴く（ブラインド）</button>
+        <button onclick="playAudio()">🔊 質問の音声を聴く</button>
+        
+        <div id="quizArea" class="hidden" style="margin-top: 15px;">
+            <p><strong>正しい応答を選んでください:</strong></p>
+            <div id="optionsContainer"></div>
+        </div>
         
         <div id="answerArea" class="hidden" style="margin-top: 15px;">
+            <p id="resultMessage" style="font-weight: bold; font-size: 1.1em;"></p>
             <p><strong>スクリプト・日本語訳:</strong></p>
             <p id="scriptText" style="color: #666;"></p>
         </div>
-        <button onclick="toggleAnswer()" id="toggleBtn" class="hidden" style="background: #6c757d;">答え（スクリプト）を見る</button>
     </div>
 
     <div class="card">
@@ -60,22 +67,33 @@
         alert("APIキーを保存しました！");
     }
 
-    let currentScript = "";
+    let currentProblem = null;
 
     async function generateProblem() {
         if (!apiKey) {
             alert("先に上の欄にAPIキーを設定してください！");
             return;
         }
-        document.getElementById("situation").innerText = "AIが問題を考えています...";
+        document.getElementById("situation").innerText = "AIが修羅場（またはビジネス）の問題を考えています...";
+        document.getElementById("quizArea").classList.add("hidden");
         document.getElementById("answerArea").classList.add("hidden");
-        document.getElementById("toggleBtn").classList.add("hidden");
         document.getElementById("aiCoachArea").classList.add("hidden");
         document.getElementById("coachResult").classList.add("hidden");
 
-        const prompt = "TOEIC Part 2 (応答問題) の形式で、リスニングのひっかけになりやすい問題を1問作成してください。以下のJSON形式のみで出力してください。Markdownのバッククォートは付けないでください。\n{\"situation\": \"状況の説明（日本語）\", \"script\": \"英語のスクリプト（例: Will you be able to finish the report by noon? - I'm afraid I have another meeting.）\", \"translation\": \"日本語訳\"}";
+        // 自由でディープな問題を作らせるためのプロンプト
+        const prompt = `TOEIC Part 2の形式をベースにしつつ、時には男女の恋愛の駆け引きや切ないドラマ・修羅場のシチュエーションも含めたリスニング応答問題を1問作成してください。以下のJSON形式のみで出力してください。Markdownのバッククォートは付けないでください。
+{
+  "situation": "状況の説明や二人の関係性の説明（日本語）",
+  "question": "英語の質問文（例: When did you first notice that I changed my perfume?）",
+  "options": [
+    "A. 選択肢1の英文",
+    "B. 選択肢2の英文",
+    "C. 選択肢3の英文"
+  ],
+  "correct": "正解の選択肢のアルファベット大文字 (例: A)",
+  "translation": "全体の日本語訳"
+}`;
 
-        // モデル名を最新の gemini-3.6-flash に変更
         const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + apiKey;
 
         try {
@@ -94,14 +112,26 @@
 
             const textResponse = data.candidates[0].content.parts[0].text.trim();
             const cleanJson = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
-            const problem = JSON.parse(cleanJson);
+            currentProblem = JSON.parse(cleanJson);
 
-            document.getElementById("situation").innerText = problem.situation;
-            currentScript = problem.script;
-            document.getElementById("scriptText").innerText = `${problem.script}\n（訳: ${problem.translation}）`;
+            // 画面に反映
+            document.getElementById("situation").innerText = currentProblem.situation;
             
-            document.getElementById("toggleBtn").classList.remove("hidden");
-            alert("新しい問題ができました！まずは「音声を聴く」で耳だけで挑戦してください。");
+            // 選択肢ボタンの生成
+            const optionsContainer = document.getElementById("optionsContainer");
+            optionsContainer.innerHTML = "";
+            currentProblem.options.forEach(opt => {
+                const btn = document.createElement("button");
+                btn.className = "option-btn";
+                btn.innerText = opt;
+                // 最初の1文字（A, B, C）を抽出して判定に使う
+                const choiceLetter = opt.charAt(0);
+                btn.onclick = () => checkAnswer(choiceLetter);
+                optionsContainer.appendChild(btn);
+            });
+
+            document.getElementById("quizArea").classList.remove("hidden");
+            alert("新しい問題ができました！音声を聴いて正しい応答を選んでください。");
         } catch (e) {
             alert("通信または解析に失敗しました。コンソールを確認してください。");
             console.error(e);
@@ -109,27 +139,36 @@
     }
 
     function playAudio() {
-        if (!currentScript) {
+        if (!currentProblem || !currentProblem.question) {
             alert("先に問題を作成してください！");
             return;
         }
-        const englishPart = currentScript.split("-")[0] || currentScript;
-        const utterance = new SpeechSynthesisUtterance(englishPart);
+        const utterance = new SpeechSynthesisUtterance(currentProblem.question);
         utterance.lang = "en-US";
         utterance.rate = 0.9;
         window.speechSynthesis.speak(utterance);
     }
 
-    function toggleAnswer() {
-        const area = document.getElementById("answerArea");
-        const btn = document.getElementById("toggleBtn");
-        if (area.classList.contains("hidden")) {
-            area.classList.remove("hidden");
-            btn.innerText = "答えを隠す";
+    function checkAnswer(selected) {
+        if (!currentProblem) return;
+        
+        const answerArea = document.getElementById("answerArea");
+        const resultMessage = document.getElementById("resultMessage");
+        const scriptText = document.getElementById("scriptText");
+
+        if (selected === currentProblem.correct) {
+            resultMessage.style.color = "#28a745";
+            resultMessage.innerText = `⭕ 正解！ (正解は ${currentProblem.correct} です)`;
         } else {
-            area.classList.add("hidden");
-            btn.innerText = "答え（スクリプト）を見る";
+            resultMessage.style.color = "#dc3545";
+            resultMessage.innerText = `❌ 不正解... (正解は ${currentProblem.correct} でした)`;
         }
+
+        scriptText.innerHTML = `<strong>質問:</strong> ${currentProblem.question}<br>` +
+                               `<strong>選択肢:</strong><br>${currentProblem.options.join("<br>")}<br><br>` +
+                               `<strong>日本語訳:</strong> ${currentProblem.translation}`;
+
+        answerArea.classList.remove("hidden");
     }
 
     let recognition;
@@ -188,9 +227,8 @@
         resultDiv.classList.remove("hidden");
         resultDiv.innerText = "AIコーチがあなたの発音を分析中...";
 
-        const prompt = `あなたは厳しい英語の発音コーチです。\n【お手本の英文】: ${currentScript}\n【ユーザーが発音して認識されたテキスト】: ${userText}\n\nこの2つを比較して、以下の構成で日本語でアドバイスをください。\n1. 判定（意味が通じるか、どこが違うか）\n2. ネイティブらしく聞こえるための具体的なアドバイス`;
+        const prompt = `あなたは厳しい英語の発音コーチです。\n【お手本の質問文】: ${currentProblem ? currentProblem.question : ""}\n【ユーザーが発音して認識されたテキスト】: ${userText}\n\nこの2つを比較して、以下の構成で日本語でアドバイスをください。\n1. 判定（意味が通じるか、どこが違うか）\n2. ネイティブらしく聞こえるための具体的なアドバイス`;
 
-        // モデル名を最新の gemini-3.6-flash に変更
         const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + apiKey;
 
         try {
