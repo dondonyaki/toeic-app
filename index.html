@@ -3,29 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI TOEIC Listening & Quiz App</title>
-    <!-- Tailwind CSS CDN -->
+    <title>AI TOEIC Listening Trainer</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & Babel CDN -->
+    <!-- React & Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+<body class="bg-slate-100 text-slate-800 font-sans antialiased">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState } = React;
 
         function App() {
-            // ステート管理
             const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [isAiModalOpen, setIsAiModalOpen] = useState(false);
             
-            // クイズデータ
             const [questions, setQuestions] = useState([
                 {
                     id: 1,
@@ -36,7 +32,7 @@
                         "C) Next Tuesday at around 2 PM."
                     ],
                     answer: 0,
-                    explanation: "場所を尋ねる疑問詞 'Where' に対する適切な答えは、選択肢Aの場所を示す表現です。"
+                    explanation: "場所を尋ねる 'Where' に対する適切な答えは、選択肢Aの場所を示す表現です。"
                 },
                 {
                     id: 2,
@@ -55,32 +51,29 @@
             const [selectedOption, setSelectedOption] = useState(null);
             const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
             
-            // ★追加：テキストを隠す（ぼかす）状態の管理（初期値はtrue＝隠す）
+            // テキストを隠す状態（初期値：隠す）
             const [isTextBlurred, setIsTextBlurred] = useState(true);
 
-            // AI生成用モーダルのフォーム
             const [aiTheme, setAiTheme] = useState('TOEIC Part 2 (Response)');
             const [aiCount, setAiCount] = useState(3);
             const [isGenerating, setIsGenerating] = useState(false);
 
-            // APIキー保存
             const saveApiKey = (key) => {
                 setApiKey(key);
                 localStorage.setItem('gemini_api_key', key);
                 setIsSettingsOpen(false);
             };
 
-            // 音声読み上げ（Web Speech API）
             const speakText = (text, onEndCallback) => {
                 if (!('speechSynthesis' in window)) {
                     alert('お使いのブラウザは音声読み上げに対応していません。');
                     if (onEndCallback) onEndCallback();
                     return;
                 }
-                window.speechSynthesis.cancel(); // 既存の音声を停止
+                window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'en-US'; // 英語リスニング用
-                utterance.rate = 0.9; // 少し聞き取りやすい速度
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
 
                 if (onEndCallback) {
                     utterance.onend = onEndCallback;
@@ -88,12 +81,9 @@
                 window.speechSynthesis.speak(utterance);
             };
 
-            // 問題・選択肢の連続音声再生（キューイング）
             const playListeningSequence = () => {
                 const currentQ = questions[currentIndex];
-                // 1. まず質問文を読み上げる
                 speakText(currentQ.question, () => {
-                    // 2. 質問が終わったら少し間を空けて、選択肢を順番に読み上げる
                     setTimeout(() => {
                         readOptionsSequentially(currentQ.options, 0);
                     }, 500);
@@ -109,31 +99,32 @@
                 });
             };
 
-            // 次の問題へ進む
             const handleNext = () => {
                 if (currentIndex < questions.length - 1) {
                     setCurrentIndex(currentIndex + 1);
                     setSelectedOption(null);
                     setIsAnswerRevealed(false);
-                    // ★次の問題に移動した瞬間に、自動でテキストを隠す（ぼかす）状態に戻す！
-                    setIsTextBlurred(true);
+                    setIsTextBlurred(true); // 次の問題で自動ぼかし
                     window.speechSynthesis.cancel();
                 }
             };
 
-            // 前の問題へ戻る
             const handlePrev = () => {
                 if (currentIndex > 0) {
                     setCurrentIndex(currentIndex - 1);
                     setSelectedOption(null);
                     setIsAnswerRevealed(false);
-                    // ★前の問題に戻ったときも同様にテキストを隠す
-                    setIsTextBlurred(true);
+                    setIsTextBlurred(true); // 前の問題で自動ぼかし
                     window.speechSynthesis.cancel();
                 }
             };
 
-            // AI問題生成機能 (Gemini API呼び出し)
+            const handleOptionClick = (idx) => {
+                if (selectedOption !== null) return;
+                setSelectedOption(idx);
+                setIsAnswerRevealed(true);
+            };
+
             const generateQuestionsByAI = async () => {
                 if (!apiKey) {
                     alert('先にAPIキーを設定してください。');
@@ -144,7 +135,7 @@
                 setIsGenerating(true);
                 const prompt = `あなたはプロのTOEIC講師です。以下のテーマでTOEIC形式の問題を ${aiCount} 問作成してください。
 テーマ: ${aiTheme}
-出力は必ず以下のJSON配列フォーマットのみで行ってください（Markdownのバッククォートなども含めず、純粋なJSON配列文字列にしてください）。余計な解説は不要です。
+出力は必ず以下のJSON配列フォーマットのみで行ってください（Markdownのバッククォートも含めず、純粋なJSON配列文字列にしてください）。
 
 [
   {
@@ -167,12 +158,9 @@
 
                     const data = await response.json();
                     const textResponse = data.candidates[0].content.parts[0].text;
-                    
-                    // JSONの抽出（パース処理の安全化）
                     let cleanJsonText = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
                     const newQs = JSON.parse(cleanJsonText);
 
-                    // データの形式を整えてセット
                     const formattedQs = newQs.map((q, idx) => ({
                         id: Date.now() + idx,
                         question: q.question,
@@ -185,11 +173,11 @@
                     setCurrentIndex(0);
                     setSelectedOption(null);
                     setIsAnswerRevealed(false);
-                    setIsTextBlurred(true); // 生成された新問題ももちろんぼかし状態からスタート
+                    setIsTextBlurred(true);
                     setIsAiModalOpen(false);
                 } catch (error) {
                     console.error(error);
-                    alert('AI問題の生成に失敗しました。APIキーを確認してください。');
+                    alert('AI問題の生成に失敗しました。');
                 } finally {
                     setIsGenerating(false);
                 }
@@ -198,23 +186,22 @@
             const currentQ = questions[currentIndex];
 
             return (
-                <div className="min-h-screen flex flex-col">
-                    {/* ヘッダー */}
+                <div className="min-h-screen flex flex-col bg-slate-100">
                     <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
                         <div className="flex items-center space-x-3">
-                            <span className="bg-indigo-600 text-white p-2 rounded-lg font-bold">🎧</span>
+                            <span className="bg-indigo-600 text-white p-2 rounded-xl font-bold">🎧</span>
                             <h1 className="text-xl font-bold text-slate-800">TOEIC Listening Trainer</h1>
                         </div>
                         <div className="flex items-center space-x-3">
                             <button 
                                 onClick={() => setIsAiModalOpen(true)}
-                                className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white px-4 py-2 rounded-lg font-medium text-sm shadow hover:opacity-90 transition flex items-center space-x-1"
+                                className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium text-sm shadow hover:bg-indigo-700 transition flex items-center space-x-1"
                             >
                                 <span>✨ AI問題生成</span>
                             </button>
                             <button 
                                 onClick={() => setIsSettingsOpen(true)}
-                                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                                className="p-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl transition"
                                 title="設定"
                             >
                                 ⚙️
@@ -222,114 +209,109 @@
                         </div>
                     </header>
 
-                    {/* メインコンテンツ */}
-                    <main className="flex-1 max-w-3xl w-full mx-auto p-6 flex flex-col justify-center">
-                        <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden p-8">
+                    <main className="flex-1 max-w-2xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center">
+                        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 sm:p-8">
                             
-                            {/* 進捗とコントロールバー */}
                             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
-                                <span className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg">
                                     Question {currentIndex + 1} / {questions.length}
                                 </span>
-                                <div className="flex items-center space-x-2">
-                                    {/* テキスト表示・非表示（ぼかし）切り替えボタン */}
-                                    <button 
-                                        onClick={() => setIsTextBlurred(!isTextBlurred)}
-                                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 ${
-                                            isTextBlurred ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                                        }`}
-                                    >
-                                        <span>{isTextBlurred ? '👁️ テキストを表示する' : '🔒 テキストを隠す'}</span>
-                                    </button>
-                                </div>
+                                <button 
+                                    onClick={() => setIsTextBlurred(!isTextBlurred)}
+                                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+                                        isTextBlurred ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                                    }`}
+                                >
+                                    {isTextBlurred ? '👁️ テキストを表示する' : '🔒 テキストを隠す'}
+                                </button>
                             </div>
 
-                            {/* 音声再生ボタン（メイン） */}
-                            <div className="text-center my-8">
+                            <div className="text-center my-6">
                                 <button 
                                     onClick={playListeningSequence}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 py-4 rounded-full shadow-lg hover:shadow-xl transition transform active:scale-95 flex items-center justify-center space-x-3 mx-auto text-lg"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-md transition transform active:scale-95 flex items-center justify-center space-x-2 mx-auto text-base w-full sm:w-auto"
                                 >
-                                    <span>🔊 リスニング音声を再生 (自動連続)</span>
+                                    <span>🔊 リスニング音声を再生（質問・選択肢）</span>
                                 </button>
-                                <p className="text-xs text-slate-400 mt-2">質問文から選択肢まで続けて流れます</p>
                             </div>
 
-                            {/* 問題文・選択肢セクション（ぼかし制御） */}
-                            <div className={`space-y-6 transition-all duration-300 ${isTextBlurred ? 'filter blur-md select-none cursor-pointer' : ''}`}
-                                 onClick={() => { if(isTextBlurred) setIsTextBlurred(false); }}
-                                 title={isTextBlurred ? "クリックすると一時的にテキストが表示されます" : ""}
-                            >
+                            <div className="space-y-6">
                                 {isTextBlurred && (
-                                    <div className="text-center text-xs text-amber-600 font-bold bg-amber-50 py-1 rounded">
-                                        🔒 テキストは隠されています（クリックまたは上のボタンで解除可能。次の問題に進むと自動でまた隠れます）
+                                    <div 
+                                        onClick={() => setIsTextBlurred(false)}
+                                        className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium p-3 rounded-xl text-center cursor-pointer hover:bg-amber-100 transition"
+                                    >
+                                        🔒 リスニング集中モード中（クリックで全テキスト表示。次の問題で自動的に隠れます）
                                     </div>
                                 )}
 
-                                <div>
-                                    <h2 className="text-lg font-bold text-slate-900 mb-4">
+                                {/* 問題文 */}
+                                <div className={`transition-all duration-300 ${isTextBlurred ? 'filter blur-sm select-none' : ''}`}>
+                                    <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-relaxed">
                                         {currentQ.question}
                                     </h2>
                                 </div>
 
+                                {/* 選択肢（ボタンの枠やA/B/Cは分かりやすくしつつ内容を制御） */}
                                 <div className="space-y-3">
                                     {currentQ.options.map((option, idx) => {
-                                        let btnStyle = "w-full text-left p-4 rounded-xl border transition font-medium ";
+                                        let btnStyle = "w-full text-left p-4 rounded-xl border transition font-medium text-sm sm:text-base ";
+                                        
                                         if (selectedOption !== null) {
                                             if (idx === currentQ.answer) {
-                                                btnStyle += "bg-emerald-50 border-emerald-300 text-emerald-800";
+                                                btnStyle += "bg-emerald-50 border-emerald-400 text-emerald-900 shadow-sm";
                                             } else if (idx === selectedOption) {
-                                                btnStyle += "bg-rose-50 border-rose-300 text-rose-800";
+                                                btnStyle += "bg-rose-50 border-rose-400 text-rose-900 shadow-sm";
                                             } else {
-                                                btnStyle += "bg-white border-slate-200 text-slate-600 opacity-60";
+                                                btnStyle += "bg-white border-slate-200 text-slate-400 opacity-50";
                                             }
                                         } else {
-                                            btnStyle += "bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50 text-slate-700";
+                                            btnStyle += "bg-white border-slate-200 hover:border-indigo-400 hover:bg-slate-50 text-slate-700 shadow-sm cursor-pointer";
                                         }
+
+                                        // 選択肢の文字自体をぼかすか、綺麗に隠すか
+                                        const optionTextClass = isTextBlurred ? "filter blur-sm select-none inline-block" : "";
 
                                         return (
                                             <button 
                                                 key={idx}
-                                                onClick={() => {
-                                                    setSelectedOption(idx);
-                                                    setIsAnswerRevealed(true);
-                                                }}
+                                                onClick={() => handleOptionClick(idx)}
                                                 className={btnStyle}
                                             >
-                                                {option}
+                                                <span className={optionTextClass}>{option}</span>
                                             </button>
                                         );
                                     })}
                                 </div>
                             </div>
 
-                            {/* 解説エリア */}
                             {isAnswerRevealed && (
-                                <div className="mt-8 p-5 bg-slate-50 rounded-xl border border-slate-200 animate-fadeIn">
-                                    <div className="flex items-center space-x-2 mb-2">
-                                        <span className={`font-bold text-sm ${selectedOption === currentQ.answer ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                            {selectedOption === currentQ.answer ? '🎉 正解！' : '❌ 不正解...'}
-                                        </span>
+                                <div className="mt-6 p-4 sm:p-5 bg-slate-50 rounded-xl border border-slate-200">
+                                    <div className="font-bold text-sm mb-1">
+                                        {selectedOption === currentQ.answer ? (
+                                            <span className="text-emerald-600">🎉 正解！</span>
+                                        ) : (
+                                            <span className="text-rose-600">❌ 不正解...</span>
+                                        )}
                                     </div>
-                                    <p className="text-sm text-slate-700 leading-relaxed">
-                                        <strong className="text-slate-900">解説：</strong>{currentQ.explanation}
+                                    <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                                        <strong>解説：</strong>{currentQ.explanation}
                                     </p>
                                 </div>
                             )}
 
-                            {/* フッターナビゲーション（次へ・前へ） */}
-                            <div className="flex justify-between items-center mt-8 pt-6 border-t border-slate-100">
+                            <div className="flex justify-between items-center mt-8 pt-4 border-t border-slate-100">
                                 <button 
                                     onClick={handlePrev}
                                     disabled={currentIndex === 0}
-                                    className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
                                 >
                                     ← 前の問題
                                 </button>
                                 <button 
                                     onClick={handleNext}
                                     disabled={currentIndex === questions.length - 1}
-                                    className="px-6 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 shadow transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                    className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 shadow transition disabled:opacity-30 disabled:cursor-not-allowed"
                                 >
                                     次の問題 →
                                 </button>
@@ -338,12 +320,12 @@
                         </div>
                     </main>
 
-                    {/* 設定モーダル（APIキー入力） */}
+                    {/* 設定モーダル */}
                     {isSettingsOpen && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center p-4 z-50">
                             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
                                 <h3 className="text-lg font-bold text-slate-900 mb-2">APIキーの設定</h3>
-                                <p className="text-xs text-slate-500 mb-4">Gemini APIを利用してAI問題を作成するために必要です。</p>
+                                <p className="text-xs text-slate-500 mb-4">Gemini APIキーを入力してください。</p>
                                 <input 
                                     type="password" 
                                     placeholder="AIzaSy..." 
@@ -354,13 +336,13 @@
                                 <div className="flex justify-end space-x-2">
                                     <button 
                                         onClick={() => setIsSettingsOpen(false)}
-                                        className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                                        className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl"
                                     >
                                         キャンセル
                                     </button>
                                     <button 
                                         onClick={() => saveApiKey(document.getElementById('apiKeyInput').value)}
-                                        className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                                        className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700"
                                     >
                                         保存する
                                     </button>
@@ -373,18 +355,17 @@
                     {isAiModalOpen && (
                         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center p-4 z-50">
                             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">✨ AIでオリジナル問題を作成</h3>
-                                <p className="text-xs text-slate-500 mb-4">Geminiに好みのテーマのTOEIC問題を作らせます。</p>
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">✨ AIで問題を作成</h3>
+                                <p className="text-xs text-slate-500 mb-4">お好みのテーマで問題を作成します。</p>
                                 
                                 <div className="space-y-4 mb-6">
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-700 mb-1">テーマ / Part指定</label>
+                                        <label className="block text-xs font-bold text-slate-700 mb-1">テーマ / Part</label>
                                         <input 
                                             type="text" 
                                             value={aiTheme}
                                             onChange={(e) => setAiTheme(e.target.value)}
                                             className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500"
-                                            placeholder="例: TOEIC Part 2 (Response), ビジネス日程調整 など"
                                         />
                                     </div>
                                     <div>
@@ -403,16 +384,16 @@
                                 <div className="flex justify-end space-x-2">
                                     <button 
                                         onClick={() => setIsAiModalOpen(false)}
-                                        className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                                        className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl"
                                     >
                                         キャンセル
                                     </button>
                                     <button 
                                         onClick={generateQuestionsByAI}
                                         disabled={isGenerating}
-                                        className="px-5 py-2 text-sm bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium"
+                                        className="px-5 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 font-medium"
                                     >
-                                        {isGenerating ? '生成中...' : '生成を開始'}
+                                        {isGenerating ? '生成中...' : '生成する'}
                                     </button>
                                 </div>
                             </div>
