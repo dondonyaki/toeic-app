@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI TOEIC Listening Trainer</title>
+    <title>AI TOEIC Listening & Speaking Trainer</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & Babel -->
@@ -15,7 +15,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect } = React;
 
         function App() {
             const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
@@ -27,9 +27,9 @@
                     id: 1,
                     question: "Where is the annual marketing conference being held this year?",
                     options: [
-                        "A) In the main auditorium on the third floor.",
-                        "B) Yes, the budget has already been approved.",
-                        "C) Next Tuesday at around 2 PM."
+                        "In the main auditorium on the third floor.",
+                        "Yes, the budget has already been approved.",
+                        "Next Tuesday at around 2 PM."
                     ],
                     answer: 0,
                     explanation: "場所を尋ねる 'Where' に対する適切な答えは、選択肢Aの場所を示す表現です。"
@@ -38,9 +38,9 @@
                     id: 2,
                     question: "When will the quarterly financial report be finalized?",
                     options: [
-                        "A) Financial statements and receipts.",
-                        "B) By the end of this week, hopefully.",
-                        "C) Mr. Davis from accounting."
+                        "Financial statements and receipts.",
+                        "By the end of this week, hopefully.",
+                        "Mr. Davis from accounting."
                     ],
                     answer: 1,
                     explanation: "時期を尋ねる 'When' に対する答えとして、期限を示す 'By the end of this week' が適切です。"
@@ -53,6 +53,10 @@
             
             // テキストを隠す状態（初期値：隠す）
             const [isTextBlurred, setIsTextBlurred] = useState(true);
+
+            // 音声認識（スピーキングチェック）用のステート
+            const [isListeningSpeech, setIsListeningSpeech] = useState(false);
+            const [spokenText, setSpokenText] = useState("");
 
             const [aiTheme, setAiTheme] = useState('TOEIC Part 2 (Response)');
             const [aiCount, setAiCount] = useState(3);
@@ -85,7 +89,8 @@
                 const currentQ = questions[currentIndex];
                 speakText(currentQ.question, () => {
                     setTimeout(() => {
-                        readOptionsSequentially(currentQ.options, 0);
+                        const formattedOptions = currentQ.options.map((opt, i) => `${String.fromCharCode(65 + i)}) ${opt}`);
+                        readOptionsSequentially(formattedOptions, 0);
                     }, 500);
                 });
             };
@@ -99,12 +104,48 @@
                 });
             };
 
+            // 発音チェック機能（マイク入力の文字起こし）
+            const startSpeechRecognition = () => {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    alert('お使いのブラウザは音声認識（スピーキングチェック）に対応していません。Chrome等のブラウザでお試しください。');
+                    return;
+                }
+
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+
+                recognition.onstart = () => {
+                    setIsListeningSpeech(true);
+                    setSpokenText("聴き取り中... 英語で話してください");
+                };
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    setSpokenText(transcript);
+                };
+
+                recognition.onerror = (event) => {
+                    setSpokenText("エラーが発生しました。もう一度お試しください。");
+                    setIsListeningSpeech(false);
+                };
+
+                recognition.onend = () => {
+                    setIsListeningSpeech(false);
+                };
+
+                recognition.start();
+            };
+
             const handleNext = () => {
                 if (currentIndex < questions.length - 1) {
                     setCurrentIndex(currentIndex + 1);
                     setSelectedOption(null);
                     setIsAnswerRevealed(false);
-                    setIsTextBlurred(true); // 次の問題で自動ぼかし
+                    setIsTextBlurred(true);
+                    setSpokenText("");
                     window.speechSynthesis.cancel();
                 }
             };
@@ -114,7 +155,8 @@
                     setCurrentIndex(currentIndex - 1);
                     setSelectedOption(null);
                     setIsAnswerRevealed(false);
-                    setIsTextBlurred(true); // 前の問題で自動ぼかし
+                    setIsTextBlurred(true);
+                    setSpokenText("");
                     window.speechSynthesis.cancel();
                 }
             };
@@ -136,11 +178,12 @@
                 const prompt = `あなたはプロのTOEIC講師です。以下のテーマでTOEIC形式の問題を ${aiCount} 問作成してください。
 テーマ: ${aiTheme}
 出力は必ず以下のJSON配列フォーマットのみで行ってください（Markdownのバッククォートも含めず、純粋なJSON配列文字列にしてください）。
+optionsには "A) " などのプレフィックスを含めず、文章のみを配列にしてください。
 
 [
   {
     "question": "英文の質問",
-    "options": ["A) 選択肢1", "B) 選択肢2", "C) 選択肢3"],
+    "options": ["選択肢1の文章", "選択肢2の文章", "選択肢3の文章"],
     "answer": 0,
     "explanation": "日本語の解説"
   }
@@ -174,6 +217,7 @@
                     setSelectedOption(null);
                     setIsAnswerRevealed(false);
                     setIsTextBlurred(true);
+                    setSpokenText("");
                     setIsAiModalOpen(false);
                 } catch (error) {
                     console.error(error);
@@ -184,13 +228,14 @@
             };
 
             const currentQ = questions[currentIndex];
+            const labels = ["A", "B", "C"];
 
             return (
                 <div className="min-h-screen flex flex-col bg-slate-100">
                     <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
                         <div className="flex items-center space-x-3">
                             <span className="bg-indigo-600 text-white p-2 rounded-xl font-bold">🎧</span>
-                            <h1 className="text-xl font-bold text-slate-800">TOEIC Listening Trainer</h1>
+                            <h1 className="text-xl font-bold text-slate-800">TOEIC Trainer</h1>
                         </div>
                         <div className="flex items-center space-x-3">
                             <button 
@@ -222,18 +267,36 @@
                                         isTextBlurred ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                                     }`}
                                 >
-                                    {isTextBlurred ? '👁️ テキストを表示する' : '🔒 テキストを隠す'}
+                                    {isTextBlurred ? '👁️ 全テキストを表示' : '🔒 テキストを隠す'}
                                 </button>
                             </div>
 
-                            <div className="text-center my-6">
+                            {/* 音声再生＆発音チェックボタンエリア */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-6">
                                 <button 
                                     onClick={playListeningSequence}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-md transition transform active:scale-95 flex items-center justify-center space-x-2 mx-auto text-base w-full sm:w-auto"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-3 rounded-xl shadow-md transition transform active:scale-95 flex items-center justify-center space-x-2 text-sm"
                                 >
-                                    <span>🔊 リスニング音声を再生（質問・選択肢）</span>
+                                    <span>🔊 音声を再生する</span>
+                                </button>
+                                <button 
+                                    onClick={startSpeechRecognition}
+                                    disabled={isListeningSpeech}
+                                    className={`font-bold px-4 py-3 rounded-xl shadow-md transition transform active:scale-95 flex items-center justify-center space-x-2 text-sm ${
+                                        isListeningSpeech ? 'bg-rose-500 text-white animate-pulse' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    }`}
+                                >
+                                    <span>🎤 {isListeningSpeech ? '聞いています...' : '発音チェック(話す)'}</span>
                                 </button>
                             </div>
+
+                            {/* 発音結果表示エリア */}
+                            {spokenText && (
+                                <div className="mb-6 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700">
+                                    <span className="font-bold text-emerald-700">🗣️ あなたの発音（認識結果）: </span>
+                                    <span className="italic">"{spokenText}"</span>
+                                </div>
+                            )}
 
                             <div className="space-y-6">
                                 {isTextBlurred && (
@@ -241,7 +304,7 @@
                                         onClick={() => setIsTextBlurred(false)}
                                         className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium p-3 rounded-xl text-center cursor-pointer hover:bg-amber-100 transition"
                                     >
-                                        🔒 リスニング集中モード中（クリックで全テキスト表示。次の問題で自動的に隠れます）
+                                        🔒 リスニング集中モード（クリックで全文表示。次の問題で自動的に隠れます）
                                     </div>
                                 )}
 
@@ -252,10 +315,10 @@
                                     </h2>
                                 </div>
 
-                                {/* 選択肢（ボタンの枠やA/B/Cは分かりやすくしつつ内容を制御） */}
+                                {/* 選択肢（A, B, C のラベルを外側に独立してはっきり配置し、どこが押せるか一目でわかるように修正） */}
                                 <div className="space-y-3">
                                     {currentQ.options.map((option, idx) => {
-                                        let btnStyle = "w-full text-left p-4 rounded-xl border transition font-medium text-sm sm:text-base ";
+                                        let btnStyle = "w-full text-left p-4 rounded-xl border transition flex items-center space-x-4 ";
                                         
                                         if (selectedOption !== null) {
                                             if (idx === currentQ.answer) {
@@ -269,16 +332,20 @@
                                             btnStyle += "bg-white border-slate-200 hover:border-indigo-400 hover:bg-slate-50 text-slate-700 shadow-sm cursor-pointer";
                                         }
 
-                                        // 選択肢の文字自体をぼかすか、綺麗に隠すか
-                                        const optionTextClass = isTextBlurred ? "filter blur-sm select-none inline-block" : "";
-
                                         return (
                                             <button 
                                                 key={idx}
                                                 onClick={() => handleOptionClick(idx)}
                                                 className={btnStyle}
                                             >
-                                                <span className={optionTextClass}>{option}</span>
+                                                {/* ラベル（A, B, C）を完全に独立させて視認性を最大化 */}
+                                                <span className="font-extrabold text-sm text-indigo-700 bg-indigo-100 w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
+                                                    {labels[idx]}
+                                                </span>
+                                                {/* 選択肢の本文 */}
+                                                <span className={`text-sm sm:text-base font-medium flex-1 ${isTextBlurred ? 'filter blur-sm select-none' : ''}`}>
+                                                    {option}
+                                                </span>
                                             </button>
                                         );
                                     })}
